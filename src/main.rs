@@ -162,29 +162,43 @@ fn main() {
     println!("File type is {}",filetype);
 
     let a = setup_options(&config,&filetype);
+    match a {
+        Ok(config) => {
 
-    println!("MY CONFIG {}",a.cpu)
+            println!("CPU {}",config.cpu);
+
+        },
+        Err(e) => println!("Error loading config"),
+    }
+
 }
 
-fn setup_options( config: &str, filetype: &str) -> QuickEmuConfig {
-    let myConfig = load_config_file(config, filetype).unwrap();
+fn setup_options( config: &str, filetype: &str) -> Result<QuickEmuConfig,u8> {
+    let myConfig = load_config_file(config, filetype);
+    match myConfig {
+        Ok(cfg) => Ok(
+            QuickEmuConfig {
+                vmname: cfg.vmname.unwrap_or("".to_string()),
+                launcher: cfg.launcher.unwrap_or("".to_string()),
+                guest_os: cfg.guest_os.unwrap_or("linux".to_string()),
+                cpu: cfg.cpu.unwrap_or("host".to_string()),
+                ram: cfg.ram.unwrap_or("2G".to_string()),
+                cpu_cores: cfg.cpu_cores.unwrap_or("1".to_string()),
+                machine: cfg.machine.unwrap_or( "q35".to_string()),
+                boot_menu: cfg.boot_menu.unwrap_or(false),
+                boot: cfg.boot.unwrap_or("".to_string()),
+                iso : cfg.iso .unwrap_or("".to_string()),
+                driver_iso: cfg.driver_iso.unwrap_or("".to_string()),
+                disk_img: cfg.disk_img.unwrap_or( "".to_string()),
+                disk: cfg.disk.unwrap_or( "128G".to_string()),
+                floppy: cfg.floppy.unwrap_or("".to_string())
+            }
 
-        QuickEmuConfig {
-            vmname: "".to_string(),
-            launcher: "".to_string(),
-            guest_os: "".to_string(),
-            cpu: myConfig.cpu.unwrap_or("host".to_string()),
-            ram: "".to_string(),
-            cpu_cores: "".to_string(),
-            machine: "".to_string(),
-            boot_menu: false,
-            boot: "".to_string(),
-            iso: "".to_string(),
-            driver_iso: "".to_string(),
-            disk_img: "".to_string(),
-            disk: "".to_string(),
-            floppy: "".to_string()
-        }
+
+        ),
+        Err(e) =>  Err(e) ,
+    }
+
 }
 
 fn load_config_file(config: &str, filetype: &str) -> Result<QuickEmuConfigOptions,u8>{
