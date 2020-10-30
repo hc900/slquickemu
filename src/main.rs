@@ -116,8 +116,23 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     let drive_cmd = set_drive_cmd(config,disk_img,0)?;
     let drive2_cmd = set_drive_cmd(config,disk2_img,1)?;
 
+    let cdrom = set_iso_file(config)?;
 
-    let cdrom_cmd = set_cdrom_cmd(config, &config.iso);
+    let cdrom_cmd: String = if cdrom.ne("") {
+        let mut index = 0;
+        if config.disk_interface.eq("ide") {
+            if config.disk_img.ne(""){
+                index = index + 1;
+            }
+            if config.disk2_img.ne("") {
+                index = index + 1;
+            }
+        }
+        format!("-drive media=cdrom,index={},file=\"{}\"",index,cdrom)
+    } else {
+      format!("")
+    };
+
     vec.push(drive_cmd);
     vec.push(drive2_cmd);
     vec.push(cdrom_cmd);
@@ -129,44 +144,42 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
 }
 
-fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: &str) -> String {
-        if cdrom.ne("")
+fn set_iso_file(config: &config::QuickEmuConfig) -> Result<String,&str> {
+    if config.iso.ne("") {
+        if Path::new(config.iso.as_str()).exists()
         {
-            let mut index = 1;
-            if config.disk_interface.eq("ide") {
-                if config.disk_img.ne("") {
-                    index = index + 1;
-                }
-                if config.disk2_img.ne("") {
-                    index = index + 1;
-                }
-            }
-
-            format!("-drive media=cdrom,index={},file=\"{}\"", index, cdrom)
+            Ok(format!("{}", config.iso))
         } else {
-            format!("")
+            error!("MISSING ISO FILE {}", config.iso);
+            Err("Missing ISO")
         }
+    } else {
+        Ok(String::from(""))
+    }
 }
 
-fn set_drive_cmd(config: &config::QuickEmuConfig,disk_img:String, drive:u8) -> Result<String, &str> {
-    let mut drive_cmd: String =  format!("-drive if={},id=drive{},cache=directsync,aio=native,format=qcow2,file=\"{}\"",config.disk_interface,drive, disk_img);
+
+fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img:String, drive_number:u8) -> Result<String, &str> {
+    let mut drive_cmd: String =  format!("-drive if={},id=drive{},cache=directsync,aio=native,format=qcow2,file=\"{}\"", config.disk_interface, drive_number, disk_img);
 
     if config.disk_interface.eq("") || config.disk_interface.eq("none")
         {
-            Ok(format!("{} -device virtio-blk-pci,drive=drive{},scsi=off",drive_cmd,drive))
+            Ok(format!("{} -device virtio-blk-pci,drive=drive{},scsi=off", drive_cmd, drive_number))
         } else if config.disk_interface.contains("scsi") {
             if config.scsi_controller.ne("")
             {
-                if drive == 0 {
+                if drive_number == 0 {
                     drive_cmd = format!("-device {} {}",config.scsi_controller,drive_cmd);
                 }
-                Ok(format!("{} -device scsi-hd,drive=drive{}",drive_cmd,drive))
+                Ok(format!("{} -device scsi-hd,drive=drive{}", drive_cmd, drive_number))
             } else {
                 let e = "SCSI CONTROLLER TYPE WAS NOT DEFINED!";
                 error!("{}",e);
                 Err(e)
             }
-        } else {
+        } else if config.disk_interface.contains("ide") {
+            Ok(String::from(""))
+    } else {
             Ok(String::from(""))
         }
  //   drive_cmd
