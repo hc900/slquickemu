@@ -106,21 +106,48 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     let disk_img = handle_disk_image(&config.qemu_img_path
                                      , &config.disk_img, &config.disk);
     let disk2_img = handle_disk_image(&config.qemu_img_path
-                                     , &config.disk2_img, &config.disk);
+                                      , &config.disk2_img, &config.disk);
     let mut vec = Vec::new();
 
-    if floppy.ne("") {
-        vec.push(format!("-fda \"{}\"",floppy));
-    }
+    let floppy = set_floppy_cmd(floppy);
 
-    let drive_cmd = set_drive_cmd(config,disk_img,0)?;
-    let drive2_cmd = set_drive_cmd(config,disk2_img,1)?;
+    let drive_cmd = set_drive_cmd(config, disk_img, 0)?;
+    let drive2_cmd = set_drive_cmd(config, disk2_img, 1)?;
 
     let cdrom = set_iso_file(config.iso.as_str())?;
     let driver_cdrom = set_iso_file(config.driver_iso.as_str())?;
     let cdrom_cmd = set_cdrom_cmd(config, cdrom, 0);
     let cdrom2_cmd = set_cdrom_cmd(config, driver_cdrom, 1);
 
+    let disp = config.display_device.clone();
+    let mut video = if disp.contains("cirrus") {
+        if disp.contains("isa") {
+            format!("-device isa-cirrus-vga")
+        } else {
+            format!("-device cirrus-vga")
+        }
+    } else if disp.contains("bochs"){
+        format!("-device bochs-display")
+    }  else if disp.contains("ati"){
+        format!("-device ati-vga")
+    } else if disp.contains("vmware"){
+        format!("-device vmware-svga")
+    } else if disp.contains("qxl"){
+        format!("-device qxl-vga")
+    } else if disp.contains("virtio"){
+        format!("-device virtio-vga,virgl={}",config.virgl)
+    } else if disp.contains("vga"){
+        if disp.contains("isa") {
+            format!("-device isa-vga")
+        } else {
+            format!("-device VGA,vgamem_mb=128")
+        }
+    } else {
+            format!("-device VGA,vgamem_mb=128")
+    };
+
+
+    vec.push(floppy);
     vec.push(drive_cmd);
     vec.push(drive2_cmd);
     vec.push(cdrom_cmd);
@@ -131,6 +158,14 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
     Ok(vec)
 
+}
+
+fn set_floppy_cmd(floppy: String) -> String {
+    if floppy.ne("") {
+        format!("-fda \"{}\"", floppy)
+    } else {
+        format!("")
+    }
 }
 
 fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: String, cdrom_index: u8) -> String {
