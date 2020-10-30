@@ -262,7 +262,7 @@ fn set_floppy_cmd(floppy: String) -> String {
 fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: String, cdrom_index: u8) -> String {
     let cdrom_cmd: String = if cdrom.ne("") {
         let mut index = cdrom_index;
-        if config.disk_interface.eq("ide") {
+        if config.disk_interface.contains("ide") {
             if config.disk_img.ne("") {
                 index = index + 1;
             }
