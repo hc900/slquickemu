@@ -127,6 +127,11 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
     let (gl,output,output_extras) = get_output_gl_virgl(&config)?;
 
+    let rtc = if config.rtc {
+        String::from("-rtc base=localtime,clock=host")
+    } else {
+        String::new()
+    };
 
     vec.push(format!("-name {0},process={0}",config.vmname));
     vec.push(format!("{} {} -machine {}",kvm,cpu,machine));

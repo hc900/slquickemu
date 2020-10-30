@@ -55,6 +55,7 @@ pub struct QuickEmuConfigOptions {
     gl: Option<bool>,
     output: Option<String>,
     output_extras: Option<String>,
+    rtc: Option<bool>,
     //bin paths
     qemu_path: Option<String>,
     qemu_img_path: Option<String>,
@@ -112,6 +113,7 @@ pub struct QuickEmuConfig {
     pub gl: bool,
     pub output: String,
     pub output_extras: String,
+    pub rtc: bool,
     //bin paths
     pub qemu_path: String,
     pub qemu_img_path: String,
@@ -188,6 +190,7 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, u8> {
                 pc_spkr: "".to_string(),
                 virgl: cfg.virgl.unwrap_or(true),
                 gl: cfg.gl.unwrap_or(true),
+                rtc: cfg.rtc.unwrap_or(true),
                 output: cfg.output.unwrap_or("sdl".to_string()),
                 output_extras: cfg.output_extras.unwrap_or("".to_string()),
                 qemu_path: cfg.qemu_path.unwrap_or(String::from(DEFAULT_QEMU)),
