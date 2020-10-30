@@ -116,14 +116,36 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     let drive_cmd = set_drive_cmd(config,disk_img,0)?;
     let drive2_cmd = set_drive_cmd(config,disk2_img,1)?;
 
+
+    let cdrom_cmd = set_cdrom_cmd(config, &config.iso);
     vec.push(drive_cmd);
     vec.push(drive2_cmd);
+    vec.push(cdrom_cmd);
     vec.push(format!("-smp {0},sockets=1,cores={0},threads=1",cpu_cores));
     vec.push( format!("-m {}",ram));
     vec.push( format!("{}",boot_menu));
 
     Ok(vec)
 
+}
+
+fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: &str) -> String {
+        if cdrom.ne("")
+        {
+            let mut index = 1;
+            if config.disk_interface.eq("ide") {
+                if config.disk_img.ne("") {
+                    index = index + 1;
+                }
+                if config.disk2_img.ne("") {
+                    index = index + 1;
+                }
+            }
+
+            format!("-drive media=cdrom,index={},file=\"{}\"", index, cdrom)
+        } else {
+            format!("")
+        }
 }
 
 fn set_drive_cmd(config: &config::QuickEmuConfig,disk_img:String, drive:u8) -> Result<String, &str> {
