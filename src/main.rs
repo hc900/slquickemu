@@ -159,31 +159,33 @@ fn set_iso_file(config: &config::QuickEmuConfig) -> Result<String,&str> {
 }
 
 
-fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img:String, drive_number:u8) -> Result<String, &str> {
-    let mut drive_cmd: String =  format!("-drive if={},id=drive{},cache=directsync,aio=native,format=qcow2,file=\"{}\"", config.disk_interface, drive_number, disk_img);
+fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, &str> {
+    let mut drive_cmd: String = format!("-drive if={},id=drive{},cache=directsync,\
+    aio=native,format=qcow2,file=\"{}\"", config.disk_interface, drive_number, disk_img);
 
-    if config.disk_interface.eq("") || config.disk_interface.eq("none")
+    if config.disk_interface.eq("") || config.disk_interface.eq("none") || config.disk_interface.contains("ide")
+    {
+        let res: String = format!("{} -device virtio-blk-pci,drive=drive{},scsi=off", drive_cmd, drive_number);
+        Ok(res)
+    } else if config.disk_interface.contains("scsi") {
+        if config.scsi_controller.ne("")
         {
-            Ok(format!("{} -device virtio-blk-pci,drive=drive{},scsi=off", drive_cmd, drive_number))
-        } else if config.disk_interface.contains("scsi") {
-            if config.scsi_controller.ne("")
-            {
-                if drive_number == 0 {
-                    drive_cmd = format!("-device {} {}",config.scsi_controller,drive_cmd);
-                }
-                Ok(format!("{} -device scsi-hd,drive=drive{}", drive_cmd, drive_number))
-            } else {
-                let e = "SCSI CONTROLLER TYPE WAS NOT DEFINED!";
-                error!("{}",e);
-                Err(e)
+            if drive_number == 0 {
+                drive_cmd = format!("-device {} {}", config.scsi_controller, drive_cmd);
             }
-        } else if config.disk_interface.contains("ide") {
-            Ok(String::from(""))
-    } else {
-            Ok(String::from(""))
+            Ok(format!("{} -device scsi-hd,drive=drive{}", drive_cmd, drive_number))
+        } else {
+            let e = "SCSI CONTROLLER TYPE WAS NOT DEFINED!";
+            error!("{}", e);
+            Err(e)
         }
- //   drive_cmd
+    } else {
+        let e = format!("DISK CONTROLLER TYPE {} IS UNKNOWN", config.disk_interface);
+        error!("{}", e);
+        Err("BUMMER")
+    }
 }
+
 
 fn handle_disk_image(qemu_img_path: &str, disk_img: &str, disk_size: &str) -> String {
         if disk_img.ne("") {
