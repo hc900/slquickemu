@@ -120,33 +120,14 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     let cdrom2_cmd = set_cdrom_cmd(config, driver_cdrom, 1);
 
     let disp = config.display_device.clone();
-    let mut video = if disp.contains("cirrus") {
-        if disp.contains("isa") {
-            format!("-device isa-cirrus-vga")
-        } else {
-            format!("-device cirrus-vga")
-        }
-    } else if disp.contains("bochs"){
-        format!("-device bochs-display")
-    }  else if disp.contains("ati"){
-        format!("-device ati-vga")
-    } else if disp.contains("vmware"){
-        format!("-device vmware-svga")
-    } else if disp.contains("qxl"){
-        format!("-device qxl-vga")
-    } else if disp.contains("virtio"){
-        format!("-device virtio-vga,virgl={}",config.virgl)
-    } else if disp.contains("vga"){
-        if disp.contains("isa") {
-            format!("-device isa-vga")
-        } else {
-            format!("-device VGA,vgamem_mb=128")
-        }
-    } else {
-            format!("-device VGA,vgamem_mb=128")
-    };
 
+    let virgl = String::from("on");
+    let video_cmd = set_video_cmd(disp, virgl);
 
+    let (gl,output,output_extras) = get_output_gl_virgl(&config)?;
+
+    vec.push(format!("{} -display {},gl={}{}",video_cmd, output,gl,output_extras));
+    vec.push(video_cmd);
     vec.push(floppy);
     vec.push(drive_cmd);
     vec.push(drive2_cmd);
@@ -158,6 +139,80 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
     Ok(vec)
 
+}
+
+fn get_output_gl_virgl(config: &config::QuickEmuConfig) -> Result<(String,String,String),&str>
+{
+    let mut gl = String::from("on");
+    let mut output_extras = String::new();
+
+    if config.gl
+    {
+        gl = String::from("on")
+    } else {
+        gl = String::from("off")
+    }
+
+    if config.output.eq("gtk")
+    {
+        if gl.eq("on") {
+            gl = String::from("es");
+        }
+        output_extras = String::from(",grab-on-hover=on,zoom-to-fit=on");
+    }
+
+    if config.output.eq("curses")
+    {
+        gl = String::from("off");
+    }
+
+    output_extras = set_output_extras(config, &output_extras);
+    let output = config.output.clone();
+    Ok((gl,output,output_extras))
+}
+
+fn set_output_extras(config: &config::QuickEmuConfig, output_extras: &String) -> String{
+    if config.output_extras.ne("")
+    {
+        let mut temp_oe = String::from("");
+        if config.output_extras.starts_with(',') {
+            temp_oe = format!("{}", config.output_extras);
+        } else {
+            temp_oe = format!(",{}", config.output_extras);
+        }
+        format!("{}{}", output_extras,temp_oe)
+    } else {
+        format!("{}", output_extras)
+    }
+}
+
+
+fn set_video_cmd(disp: String, virgl: String) -> String {
+   if disp.contains("cirrus") {
+        if disp.contains("isa") {
+            format!("-device isa-cirrus-vga")
+        } else {
+            format!("-device cirrus-vga")
+        }
+    } else if disp.contains("bochs") {
+        format!("-device bochs-display")
+    } else if disp.contains("ati") {
+        format!("-device ati-vga")
+    } else if disp.contains("vmware") {
+        format!("-device vmware-svga")
+    } else if disp.contains("qxl") {
+        format!("-device qxl-vga")
+    } else if disp.contains("virtio") {
+        format!("-device virtio-vga,virgl={}", virgl)
+    } else if disp.contains("vga") {
+        if disp.contains("isa") {
+            format!("-device isa-vga")
+        } else {
+            format!("-device VGA,vgamem_mb=128")
+        }
+    } else {
+        format!("-device VGA,vgamem_mb=128")
+    }
 }
 
 fn set_floppy_cmd(floppy: String) -> String {

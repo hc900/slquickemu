@@ -53,7 +53,7 @@ pub struct QuickEmuConfigOptions {
     virgl: Option<bool>,
     gl: Option<bool>,
     output: Option<String>,
-
+    output_extras: Option<String>,
     //bin paths
     qemu_path: Option<String>,
     qemu_img_path: Option<String>,
@@ -109,7 +109,7 @@ pub struct QuickEmuConfig {
     pub virgl: bool,
     pub gl: bool,
     pub output: String,
-
+    pub output_extras: String,
     //bin paths
     pub qemu_path: String,
     pub qemu_img_path: String,
@@ -182,9 +182,10 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, u8> {
                 audio: "".to_string(),
                 audio_output: "".to_string(),
                 pc_spkr: "".to_string(),
-                virgl: false,
-                gl: false,
-                output: "".to_string(),
+                virgl: cfg.virgl.unwrap_or(true),
+                gl: cfg.gl.unwrap_or(true),
+                output: cfg.output.unwrap_or("sdl".to_string()),
+                output_extras: cfg.output_extras.unwrap_or("".to_string()),
                 qemu_path: cfg.qemu_path.unwrap_or(String::from(DEFAULT_QEMU)),
                 qemu_img_path: cfg.qemu_img_path.unwrap_or(String::from(DEFAULT_QEMU_IMG)),
             };
