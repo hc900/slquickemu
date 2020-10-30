@@ -23,113 +23,20 @@
  *
  */
 
+pub mod config;
+mod utils;
+
 extern crate clap;
-use clap::{Arg, App, SubCommand, Values};
-use std::path::Path;
-use std::ffi::OsStr;
-use serde::Deserialize;
-use std::fs::File;
-use std::io::Read;
-use std::io;
+use clap::{Arg, App }; // SubCommand, Values};
 use std::process::Command;
+use num_cpus::get;
+use crate::utils::get_system_memory;
+use toml::from_str;
+use std::path::Path;
+use std::fs::File;
 
-#[derive(Deserialize)]
-struct Tweaks {
-    i : i8
-}
-
-#[derive(Deserialize)]
-struct QuickEmuConfigOptions {
-    vmname: Option<String>,
-    launcher: Option<String>,
-
-    guest_os: Option<String>,
-
-    cpu: Option<String>, //cpu string + tweaks
-    ram: Option<String>, //ram
-    cpu_cores: Option<String>, //cores
-
-    machine: Option<String>, // default q35
-
-    boot_menu: Option<bool>, //display menu or not
-    boot: Option<String>, // Legacy or EFI
-
-    iso: Option<String>, // PATH
-    driver_iso: Option<String>, //PATH
-
-    disk_img: Option<String>, //path
-    disk: Option<String>, //size
-
-    floppy : Option<String>, //Path
-
-    //devices
-
-}
-
-struct QuickEmuConfig {
-    vmname: String,
-    launcher: String,
-
-    guest_os: String,
-
-    cpu: String, //cpu string + tweaks
-    ram: String, //ram
-    cpu_cores: String, //cores
-
-    machine: String, // default q35
-
-    boot_menu: bool, //display menu or not
-    boot: String, // Legacy or EFI
-
-    iso: String, // PATH
-    driver_iso: String, //PATH
-
-    disk_img: String, //path
-    disk: String, //size
-
-    floppy : String, //Path
-
-}
-
-
-fn get_extension_from_file(filename: &str) -> Option<&str> {
-    Path::new(filename)
-        .extension()
-        .and_then(OsStr::to_str)
-}
-
-fn slurp_file(filename: &str) -> Result<String, u8> {
-    let mut file = match File::open(filename) {
-        Err(e) => return Err(1),
-        Ok(f) => f,
-    };
-    let mut contents = String::new();
-    let len = match file.read_to_string(&mut contents)
-    {
-        Err(e) => return Err(2),
-        Ok(f) => f,
-    };
-
-    if ( len < 0 ) {
-        return Err(4);
-    }
-
-    Ok(String::from(contents))
-}
-
-fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions,u8> {
-    let config_string = slurp_file(filename)?;
-    //let config_string = r#"cpu = '486'"#;
-    let config_q = toml::from_str(&*config_string);
-    Ok(config_q.unwrap())
-}
-
-fn test(i: u8) -> Result<i8,&'static str>{
-    match i{
-        0..=127 => Ok(1),
-        _ =>     Err("noob"),
-    }
-}
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 
 fn main() {
     let matches = App::new("slquickemu")
@@ -144,67 +51,177 @@ fn main() {
             .required(true)
         )
         .get_matches();
-
+/*
     let r = Command::new("/bin/ls")
         .args(&["-ltra","/"])
         .output()
         .expect("Failed to run LS");
-
     println!("e {}",r.status);
     println!("stdout: {}", String::from_utf8_lossy(&r.stdout));
     println!("stdout: {}", String::from_utf8_lossy(&r.stderr));
+*/
+    pretty_env_logger::init();
+
 
 
     let config = matches.value_of("config").unwrap();
-    let filetype= get_extension_from_file(&config)
-        .unwrap_or("none");
     println!("Using config file: {}",config);
-    println!("File type is {}",filetype);
 
-    let a = setup_options(&config,&filetype);
+    let a = config::setup_options(&config);
+    let mut cfg =
     match a {
         Ok(config) => {
-
-            println!("CPU {}",config.cpu);
-
-        },
-        Err(e) => println!("Error loading config"),
-    }
-
-}
-
-fn setup_options( config: &str, filetype: &str) -> Result<QuickEmuConfig,u8> {
-    let myConfig = load_config_file(config, filetype);
-    match myConfig {
-        Ok(cfg) => Ok(
-            QuickEmuConfig {
-                vmname: cfg.vmname.unwrap_or("".to_string()),
-                launcher: cfg.launcher.unwrap_or("".to_string()),
-                guest_os: cfg.guest_os.unwrap_or("linux".to_string()),
-                cpu: cfg.cpu.unwrap_or("host".to_string()),
-                ram: cfg.ram.unwrap_or("2G".to_string()),
-                cpu_cores: cfg.cpu_cores.unwrap_or("1".to_string()),
-                machine: cfg.machine.unwrap_or( "q35".to_string()),
-                boot_menu: cfg.boot_menu.unwrap_or(false),
-                boot: cfg.boot.unwrap_or("".to_string()),
-                iso : cfg.iso .unwrap_or("".to_string()),
-                driver_iso: cfg.driver_iso.unwrap_or("".to_string()),
-                disk_img: cfg.disk_img.unwrap_or( "".to_string()),
-                disk: cfg.disk.unwrap_or( "128G".to_string()),
-                floppy: cfg.floppy.unwrap_or("".to_string())
+            match build_config(&config) {
+                Ok(t) => t,
+                Err(e) => Vec::new(),
             }
+        },
+        Err(e) => {
+            error!("Error loading config");
+            Vec::new()
+        },
+    };
 
+    //let mut arguments = Vec::new();
 
-        ),
-        Err(e) =>  Err(e) ,
+    for test in cfg {
+      //println!("{} ",test);
+        let mut s: Vec<String> = test.trim().split(' ').map(|t|t.to_string()).collect();
+        for f in s {
+            print!("{} ", f);
+        }
     }
+
+    //for m in arguments {
+    //    print!("{} ",m);
+    //}
 
 }
 
-fn load_config_file(config: &str, filetype: &str) -> Result<QuickEmuConfigOptions,u8>{
-    match filetype {
-        "toml" => load_config_from_toml(config),
-        "yaml" => Err(8),
-        _ => Err(16)
+fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
+    let cpu_cores = set_cpu_cores(config);
+    let ram = set_ram_value(config);
+    let floppy = set_floppy(config)?;
+    let boot_menu = set_boot_menu(config);
+    let disk_img = handle_disk_image(&config.qemu_img_path
+                                     , &config.disk_img, &config.disk);
+    let disk2_img = handle_disk_image(&config.qemu_img_path
+                                     , &config.disk2_img, &config.disk);
+    let mut vec = Vec::new();
+
+    if floppy.ne("") {
+        vec.push(format!("-fda \"{}\"",floppy));
+    }
+
+    let drive_cmd = set_drive_cmd(config,disk_img,0)?;
+    let drive2_cmd = set_drive_cmd(config,disk2_img,1)?;
+
+    vec.push(drive_cmd);
+    vec.push(drive2_cmd);
+    vec.push(format!("-smp {0},sockets=1,cores={0},threads=1",cpu_cores));
+    vec.push( format!("-m {}",ram));
+    vec.push( format!("{}",boot_menu));
+
+    Ok(vec)
+
+}
+
+fn set_drive_cmd(config: &config::QuickEmuConfig,disk_img:String, drive:u8) -> Result<String, &str> {
+    let mut drive_cmd: String =  format!("-drive if={},id=drive{},cache=directsync,aio=native,format=qcow2,file=\"{}\"",config.disk_interface,drive, disk_img);
+
+    if config.disk_interface.eq("") || config.disk_interface.eq("none")
+        {
+            Ok(format!("{} -device virtio-blk-pci,drive=drive{},scsi=off",drive_cmd,drive))
+        } else if config.disk_interface.contains("scsi") {
+            if config.scsi_controller.ne("")
+            {
+                if drive == 0 {
+                    drive_cmd = format!("-device {} {}",config.scsi_controller,drive_cmd);
+                }
+                Ok(format!("{} -device scsi-hd,drive=drive{}",drive_cmd,drive))
+            } else {
+                let e = "SCSI CONTROLLER TYPE WAS NOT DEFINED!";
+                error!("{}",e);
+                Err(e)
+            }
+        } else {
+            Ok(String::from(""))
+        }
+ //   drive_cmd
+}
+
+fn handle_disk_image(qemu_img_path: &str, disk_img: &str, disk_size: &str) -> String {
+        if disk_img.ne("") {
+            if !Path::new(disk_img).exists() {
+                //make disk image
+                debug!("{} is imger", qemu_img_path);
+
+                let r = Command::new(qemu_img_path)
+                    .args(&["create", "-q", "-f", "qcow2",disk_img,disk_size])
+                    .output()
+                    .expect("Failed to make disk image");
+                debug!("e {}",r.status);
+                debug!("stdout: {}", String::from_utf8_lossy(&r.stdout));
+                debug!("stdout: {}", String::from_utf8_lossy(&r.stderr))
+
+            } else {
+                debug!("Image seems to exist, skipping creation!");
+            }
+            format!("{}", disk_img)
+        } else {
+            debug!("Disk Image was not set.");
+            format!("")
+        }
+}
+
+fn set_boot_menu(config: &config::QuickEmuConfig) -> String {
+    let boot_menu = if config.boot_menu == true {
+        format!("-boot menu=on")
+    } else {
+        format!("-boot menu=off")
+    };
+    boot_menu
+}
+
+fn set_floppy(config: &config::QuickEmuConfig) -> Result<String, &str> {
+    if config.floppy.ne("") {
+        if Path::new(config.floppy.as_str()).exists() {
+            Ok(format!("-fda {}", config.floppy))
+        } else {
+            error!("File {} does not seem to exist!", config.floppy);
+            Err("File does not exist")
+        }
+    } else {
+        Ok(format!(""))
     }
 }
+
+fn set_ram_value(config: &config::QuickEmuConfig) -> String {
+    let ram = if config.ram.eq("auto") {
+        let m = utils::get_system_memory() / 1_000_000;
+        if m >= 64 {
+            format!("{}G", 4u8)
+        } else if m >= 16 {
+            format!("{}G", 3u8)
+        } else {
+            format!("{}G", 2u8)
+        }
+    } else {
+        format!("{}", config.ram)
+    };
+    ram
+}
+
+fn set_cpu_cores(config: &config::QuickEmuConfig) -> u8 {
+    let cpu_cores = if config.cpu_cores == 0 {
+        if num_cpus::get_physical() >= 8 {
+            4u8
+        } else {
+            2u8
+        }
+    } else {
+        config.cpu_cores
+    };
+    cpu_cores
+}
+
