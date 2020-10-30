@@ -99,6 +99,7 @@ fn main() {
 }
 
 fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
+    let (cpu,machine, kvm ) = set_cpu_cmd(config)?;
     let cpu_cores = set_cpu_cores(config);
     let ram = set_ram_value(config);
     let floppy = set_floppy(config)?;
@@ -126,6 +127,12 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
     let (gl,output,output_extras) = get_output_gl_virgl(&config)?;
 
+
+    vec.push(format!("-name {0},process={0}",config.vmname));
+    vec.push(format!("{} {} -machine {}",kvm,cpu,machine));
+    vec.push(format!("-smp {0},sockets=1,cores={0},threads=1",cpu_cores));
+    vec.push(format!("-m {}",ram));
+    vec.push(format!("{}",boot_menu));
     vec.push(format!("{} -display {},gl={}{}",video_cmd, output,gl,output_extras));
     vec.push(video_cmd);
     vec.push(floppy);
@@ -133,12 +140,36 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     vec.push(drive2_cmd);
     vec.push(cdrom_cmd);
     vec.push(cdrom2_cmd);
-    vec.push(format!("-smp {0},sockets=1,cores={0},threads=1",cpu_cores));
-    vec.push( format!("-m {}",ram));
-    vec.push( format!("{}",boot_menu));
+    vec.push(rtc);
 
     Ok(vec)
 
+}
+
+fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String),&str>
+{
+    let mut cpu = String::new();
+    if !config.cpu.starts_with("-cpu")
+    {
+        cpu = format!("-cpu {}",config.cpu);
+    } else {
+        cpu = config.cpu.clone();
+    }
+    let mut machine = config.machine.clone();
+
+    //final things
+    if config.display_device.contains("isa") || config.disk_interface.contains("isa")
+    {
+        machine = String::from("isapc");
+    }
+
+    let mut kvm = String::new();
+    if !config.kvm {
+        kvm = String::from("");
+    } else {
+        kvm = String::from("-enable-kvm")
+    }
+    Ok((cpu,machine,kvm))
 }
 
 fn get_output_gl_virgl(config: &config::QuickEmuConfig) -> Result<(String,String,String),&str>

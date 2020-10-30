@@ -16,6 +16,7 @@ pub struct QuickEmuConfigOptions {
     guest_os: Option<String>,
 
     cpu: Option<String>,
+    kvm: Option<bool>,
     //cpu string + tweaks
     ram: Option<String>,
     //ram
@@ -72,6 +73,7 @@ pub struct QuickEmuConfig {
     pub guest_os: String,
 
     pub cpu: String,
+    pub kvm: bool,
     //cpu string + tweaks
     pub ram: String,
     //ram
@@ -157,12 +159,14 @@ fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions, u8> {
 
 pub fn setup_options(config: &str) -> Result<QuickEmuConfig, u8> {
     let my_config = load_config_file(config);
+    let filename = Path::new(config).file_stem().and_then(OsStr::to_str).unwrap_or("vm");
     match my_config {
         Ok(cfg) => {
             let q = QuickEmuConfig {
-                vmname: cfg.vmname.unwrap_or("".to_string()),
+                vmname: cfg.vmname.unwrap_or(String::from(filename)),
                 launcher: cfg.launcher.unwrap_or("".to_string()),
                 guest_os: cfg.guest_os.unwrap_or("linux".to_string()),
+                kvm: cfg.kvm.unwrap_or(true),
                 cpu: cfg.cpu.unwrap_or("-cpu host,kvm=on".to_string()),
                 ram: cfg.ram.unwrap_or("auto".to_string()),
                 cpu_cores: cfg.cpu_cores.unwrap_or(0u8),
