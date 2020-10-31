@@ -338,8 +338,16 @@ fn set_iso_file(iso: &str) -> Result<String,&str> {
 
 
 fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, &str> {
+    let iface = if config.disk_interface.eq("") ||
+        config.disk_interface.eq("none") || config.disk_interface.contains("scsi")
+    {
+        "none"
+    } else
+    {
+        "ide"
+    };
     let mut drive_cmd: String = format!("-drive if={},id=drive{},cache=directsync,\
-    aio=native,format=qcow2,file=\"{}\"", config.disk_interface, drive_number, disk_img);
+    aio=native,format=qcow2,file=\"{}\"", iface, drive_number, disk_img);
 
     if config.disk_interface.eq("") || config.disk_interface.eq("none") || config.disk_interface.contains("ide")
     {
