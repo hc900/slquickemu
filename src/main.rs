@@ -137,7 +137,12 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
     let xdg_dir = BaseDirs::new();
     let l = match xdg_dir {
-        Some(x) => "",
+        Some(x) => {
+            match x.runtime_dir() {
+                Some(x) => "",
+                None => return Err("nope"),
+            }
+        },
         None => return Err("Nope"),
     };
 
