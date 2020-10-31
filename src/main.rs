@@ -67,7 +67,7 @@ fn main() {
 
 
     let config = matches.value_of("config").unwrap();
-    println!("Using config file: {}",config);
+    info!("Using config file: {}",config);
 
     let a = config::setup_options(&config);
     let mut cfg =
