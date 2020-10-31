@@ -30,7 +30,7 @@ extern crate clap;
 use clap::{Arg, App }; // SubCommand, Values};
 use std::process::Command;
 use num_cpus::get;
-use crate::utils::get_system_memory;
+use crate::utils::{get_system_memory, find_open_socket};
 use toml::from_str;
 use std::path::{Path, PathBuf};
 use std::fs::File;
@@ -151,6 +151,18 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     }
         audio_output += &*format!(",audiodev={}",config.audio_output);
 
+    let open_port = find_open_socket(5900)?;
+    let spice_port = if config.spice && open_port > 0
+    {
+        format!("-spice port={},disable-ticketing",open_port)
+    } else {
+        String::from("")
+    };
+
+    //TODO
+    //rng
+    //serial port
+    //extra options
 
     vec.push(format!("-name {0},process={0}",config.vmname));
     vec.push(format!("{} {} -machine {}",kvm,cpu,machine));
@@ -166,6 +178,7 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     vec.push(cdrom2_cmd);
     vec.push(rtc);
     vec.push(audio_output);
+    vec.push(spice_port);
 
     Ok(vec)
 
