@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::net::TcpStream;
+use crate::config;
 
 pub fn get_system_memory() ->  u64 {
     let file = match File::open("/proc/meminfo") {
@@ -18,7 +19,7 @@ pub fn get_system_memory() ->  u64 {
             _ => continue,
         };
         let mut kb = value.split(' ');
-        let number = match(kb.next()) {
+        let number = match kb.next() {
             Some(number) => match number.trim().parse() {
                 Ok(val) => val,
                 Err(_) => break,
@@ -36,11 +37,11 @@ pub fn get_system_memory() ->  u64 {
 
 fn socket_connect(port:u16) -> std::io::Result<()>
 {
-    let stream = TcpStream::connect(format!("127.0.0.1:{}",port))?;
+    TcpStream::connect(format!("127.0.0.1:{}",port))?;
     Ok(())
 }
 
-pub fn find_open_socket<'a>(base_port: u16) -> Result<u16,&'a str>
+pub fn find_open_socket(base_port: u16) -> Result<u16,config::ERRORCODES>
 {
     for i in 1..=5
     {
@@ -48,10 +49,10 @@ pub fn find_open_socket<'a>(base_port: u16) -> Result<u16,&'a str>
         debug!("Trying port {}",port);
         let r = socket_connect(port);
         match r {
-            Ok(t) => continue,
-            Err(e) => return Ok(port),
+            Ok(_t) => continue,
+            Err(_e) => return Ok(port),
         }
     }
     error!("Exhausted open port search");
-    Err("Exhausted Search")
+    Err(config::ERRORCODES::NoOpenPorts)
 }
