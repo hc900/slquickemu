@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::net::TcpStream;
+use crate::config;
 
 pub fn get_system_memory() ->  u64 {
     let file = match File::open("/proc/meminfo") {
@@ -40,7 +41,7 @@ fn socket_connect(port:u16) -> std::io::Result<()>
     Ok(())
 }
 
-pub fn find_open_socket<'a>(base_port: u16) -> Result<u16,&'a str>
+pub fn find_open_socket(base_port: u16) -> Result<u16,config::ERRORCODES>
 {
     for i in 1..=5
     {
@@ -53,5 +54,5 @@ pub fn find_open_socket<'a>(base_port: u16) -> Result<u16,&'a str>
         }
     }
     error!("Exhausted open port search");
-    Err("Exhausted Search")
+    Err(config::ERRORCODES::NO_OPEN_PORTS)
 }

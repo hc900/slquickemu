@@ -36,11 +36,12 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use directories::BaseDirs;
 use std::ffi::OsStr;
+use crate::config::ERRORCODES;
 
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 
-fn main() {
+fn main() -> Result<(), ERRORCODES> {
     let matches = App::new("slquickemu")
         .version("0.1")
         .author("HC hc@hackerlan.com")
@@ -69,18 +70,18 @@ fn main() {
     let config = matches.value_of("config").unwrap();
     info!("Using config file: {}",config);
 
-    let a = config::setup_options(&config);
-    let mut cfg =
-    match a {
+    let quick_emu_config = config::setup_options(&config);
+    let (cfg,config) =
+    match quick_emu_config {
         Ok(config) => {
             match build_config(&config) {
-                Ok(t) => t,
-                Err(e) => Vec::new(),
+                Ok(t) => (t,config),
+                Err(e) => return Err(e),
             }
         },
         Err(e) => {
             error!("Error loading config");
-            Vec::new()
+            return Err(e);
         },
     };
 
@@ -93,14 +94,14 @@ fn main() {
             print!("{} ", f);
         }
     }
-
+    Ok(())
     //for m in arguments {
     //    print!("{} ",m);
     //}
 
 }
 
-fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
+fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,config::ERRORCODES> {
     let (cpu,machine, kvm ) = set_cpu_cmd(config)?;
     let cpu_cores = set_cpu_cores(config);
     let ram = set_ram_value(config);
@@ -184,32 +185,32 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
 }
 
-fn get_xdg_runtime<'a>() -> Result<String,&'a str>{
+fn get_xdg_runtime() -> Result<String,config::ERRORCODES>{
     let mut my_xdg_dir: String = String::new();
     let xdg_dir = BaseDirs::new();
     let l = match xdg_dir {
         Some(x) => {
             x
         },
-        None => return Err("Nope"),
+        None => return Err(config::ERRORCODES::MISSING_XDG),
     };
 
     let xdg_runtime_dir = match l.runtime_dir()
     {
         Some(x) => x.to_str(),
-        None => return Err("Nope"),
+        None => return Err(config::ERRORCODES::MISSING_XDG),
     };
 
     let acutual_xdg_runtime_dir = match xdg_runtime_dir
     {
         Some(x) => x,
-        None => return Err("Nope"),
+        None => return Err(config::ERRORCODES::MISSING_XDG),
     };
 
     Ok(acutual_xdg_runtime_dir.to_string())
 }
 
-fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String),&str>
+fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String),config::ERRORCODES>
 {
     let mut cpu = String::new();
     if !config.cpu.starts_with("-cpu")
@@ -235,7 +236,7 @@ fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String)
     Ok((cpu,machine,kvm))
 }
 
-fn get_output_gl_virgl(config: &config::QuickEmuConfig) -> Result<(String,String,String),&str>
+fn get_output_gl_virgl(config: &config::QuickEmuConfig) -> Result<(String,String,String),config::ERRORCODES>
 {
     let mut gl = String::from("on");
     let mut output_extras = String::new();
@@ -335,14 +336,14 @@ fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: String, cdrom_index: u8
     cdrom_cmd
 }
 
-fn set_iso_file(iso: &str) -> Result<String,&str> {
+fn set_iso_file(iso: &str) -> Result<String,config::ERRORCODES> {
     if iso.ne("") {
         if Path::new(iso).exists()
         {
             Ok(format!("{}", iso))
         } else {
             error!("MISSING ISO FILE {}", iso);
-            Err("Missing ISO")
+            Err(config::ERRORCODES::NO_SUCH_FILE)
         }
     } else {
         Ok(String::from(""))
@@ -350,7 +351,7 @@ fn set_iso_file(iso: &str) -> Result<String,&str> {
 }
 
 
-fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, &str> {
+fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, config::ERRORCODES> {
     let iface = if config.disk_interface.eq("") ||
         config.disk_interface.eq("none") || config.disk_interface.contains("scsi")
     {
@@ -376,12 +377,12 @@ fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number
         } else {
             let e = "SCSI CONTROLLER TYPE WAS NOT DEFINED!";
             error!("{}", e);
-            Err(e)
+            Err(config::ERRORCODES::SCSI_CONTROLLER_MISSING)
         }
     } else {
         let e = format!("DISK CONTROLLER TYPE {} IS UNKNOWN", config.disk_interface);
         error!("{}", e);
-        Err("BUMMER")
+        Err(config::ERRORCODES::UNKNOWN_DISK_CONTROLLER)
     }
 }
 
@@ -419,13 +420,13 @@ fn set_boot_menu(config: &config::QuickEmuConfig) -> String {
     boot_menu
 }
 
-fn set_floppy(config: &config::QuickEmuConfig) -> Result<String, &str> {
+fn set_floppy(config: &config::QuickEmuConfig) -> Result<String, config::ERRORCODES> {
     if config.floppy.ne("") {
         if Path::new(config.floppy.as_str()).exists() {
             Ok(format!("-fda {}", config.floppy))
         } else {
             error!("File {} does not seem to exist!", config.floppy);
-            Err("File does not exist")
+            Err(config::ERRORCODES::NO_SUCH_FILE)
         }
     } else {
         Ok(format!(""))

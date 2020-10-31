@@ -3,6 +3,20 @@ use std::path::Path;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Read;
+use log::Level::Error;
+
+#[derive(Debug)]
+pub enum ERRORCODES {
+    OPEN_CONFIG_FILE,
+    READ_CONFIG_FILE,
+    NO_SUCH_FILE,
+    SCSI_CONTROLLER_MISSING,
+    UNKNOWN_DISK_CONTROLLER,
+    MISSING_XDG,
+    NO_OPEN_PORTS,
+    YAML,
+    MISC,
+}
 
 const DEFAULT_QEMU: &str  = "/snap/bin/qemu-virgil";
 const DEFAULT_QEMU_IMG: &str = "/snap/bin/qemu-virgil.qemu-img";
@@ -129,11 +143,11 @@ fn get_extension_from_file(filename: &str) -> Option<&str> {
         .and_then(OsStr::to_str)
 }
 
-fn slurp_file(filename: &str) -> Result<String, u8> {
+fn slurp_file(filename: &str) -> Result<String, ERRORCODES> {
     let mut file = match File::open(filename) {
         Err(e) => {
             println!("{:?}",e);
-            return Err(1)},
+            return Err(ERRORCODES::OPEN_CONFIG_FILE)},
         Ok(f) => f,
     };
     let mut contents = String::new();
@@ -141,7 +155,7 @@ fn slurp_file(filename: &str) -> Result<String, u8> {
     {
         Err(e) => {
             println!("{:?}",e);
-            return Err(2)
+            return Err(ERRORCODES::READ_CONFIG_FILE)
         },
         Ok(f) => f,
     };
@@ -154,14 +168,14 @@ fn slurp_file(filename: &str) -> Result<String, u8> {
     Ok(String::from(contents))
 }
 
-fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions, u8> {
+fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
     let config_string = slurp_file(filename)?;
     //let config_string = r#"cpu = '486'"#;
     let config_q = toml::from_str(&*config_string);
     Ok(config_q.unwrap())
 }
 
-pub fn setup_options(config: &str) -> Result<QuickEmuConfig, u8> {
+pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
     let my_config = load_config_file(config);
     let filename = Path::new(config).file_stem().and_then(OsStr::to_str).unwrap_or("vm");
     match my_config {
@@ -206,12 +220,12 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, u8> {
     }
 }
 
-fn load_config_file(config: &str) -> Result<QuickEmuConfigOptions, u8> {
+fn load_config_file(config: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
     let filetype = get_extension_from_file(&config)
         .unwrap_or("none");
     match filetype {
         "toml" => load_config_from_toml(config),
-        "yaml" => Err(8),
-        _ => Err(16)
+        "yaml" => Err(ERRORCODES::YAML),
+        _ => Err(ERRORCODES::MISC)
     }
 }
