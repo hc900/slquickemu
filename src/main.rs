@@ -85,7 +85,7 @@ fn main() {
     };
 
     //let mut arguments = Vec::new();
-
+    print!("qemu-system-i386 ");
     for test in cfg {
       //println!("{} ",test);
         let mut s: Vec<String> = test.trim().split(' ').map(|t|t.to_string()).collect();
