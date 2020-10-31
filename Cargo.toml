@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 toml = "0.5.7"
+serde_yaml = "0.8.14"
 clap = "2"
 serde = { version = "1.0", features = ["derive"] }
 num_cpus = "1.13.0"

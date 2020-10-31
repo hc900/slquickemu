@@ -171,6 +171,14 @@ fn slurp_file(filename: &str) -> Result<String, ERRORCODES> {
     Ok(String::from(contents))
 }
 
+fn load_config_from_yaml(filename: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
+    let config_string = slurp_file(filename)?;
+    //let config_string = r#"cpu = '486'"#;
+    let config_q = serde_yaml::from_str(&*config_string);
+    Ok(config_q.unwrap())
+}
+
+
 fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
     let config_string = slurp_file(filename)?;
     //let config_string = r#"cpu = '486'"#;
@@ -228,7 +236,7 @@ fn load_config_file(config: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
         .unwrap_or("none");
     match filetype {
         "toml" => load_config_from_toml(config),
-        "yaml" => Err(ERRORCODES::YAML),
+        "yaml" => load_config_from_yaml(config),
         _ => Err(ERRORCODES::MISC)
     }
 }
@@ -245,7 +253,7 @@ pub fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,confi
                                       , &config.disk2_img, &config.disk);
     let mut vec = Vec::new();
 
-    let floppy = set_floppy_cmd(floppy);
+    //let floppy = set_floppy_cmd(floppy);
 
     let drive_cmd = set_drive_cmd(config, disk_img, 0)?;
     let drive2_cmd = set_drive_cmd(config, disk2_img, 1)?;
@@ -345,7 +353,7 @@ fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String)
 {
     let mut cpu: String;
     cpu = String::from("");
-    debug!("Starting cpu as blank {}",cpu);
+
     if !config.cpu.starts_with("-cpu")
     {
         cpu = format!("-cpu {}",config.cpu);
@@ -362,7 +370,6 @@ fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String)
 
     let mut kvm ;
     kvm = String::from("");
-    debug!("kvm is blank {}",kvm);
     if !config.kvm {
         kvm = String::from("");
     } else {
@@ -539,7 +546,7 @@ fn handle_disk_image(qemu_img_path: &str, disk_img: &str, disk_size: &str) -> St
                 debug!("stdout: {}", String::from_utf8_lossy(&r.stderr))
 
             } else {
-                debug!("Image seems to exist, skipping creation!");
+                debug!("Image {} seems to exist, skipping creation!",disk_img);
             }
             format!("{}", disk_img)
         } else {
