@@ -32,8 +32,10 @@ use std::process::Command;
 use num_cpus::get;
 use crate::utils::get_system_memory;
 use toml::from_str;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fs::File;
+use directories::BaseDirs;
+use std::ffi::OsStr;
 
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
@@ -132,6 +134,15 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     } else {
         String::new()
     };
+
+    let xdg_dir = BaseDirs::new();
+    let l = match xdg_dir {
+        Some(x) => "",
+        None => return Err("Nope"),
+    };
+
+    //println!("{:?}",p);
+    //let mut audio =
 
     vec.push(format!("-name {0},process={0}",config.vmname));
     vec.push(format!("{} {} -machine {}",kvm,cpu,machine));
