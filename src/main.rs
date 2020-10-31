@@ -135,20 +135,18 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
         String::new()
     };
 
-    let xdg_dir = BaseDirs::new();
-    let l = match xdg_dir {
-        Some(x) => {
-            match x.runtime_dir() {
-                Some(x) => "",
-                None => return Err("nope"),
-            }
-        },
-        None => return Err("Nope"),
-    };
+    let xdg = get_xdg_runtime()?;
 
-    //println!("{:?}",p);
-    //let mut audio =
-
+    let mut audio_output = format!("-audiodev {0},id={0}",config.audio_output);
+    if config.audio_output.eq("pa")
+    {
+        audio_output += &*format!(",server=unix:{0}/pulse/native,\
+                        out.stream-name={1}-{2},\
+                        in.stream-name={1}-{2} \
+                        -device {3}", xdg, "barbie", config.vmname, config.audio);
+    }
+    println!("{}",audio_output);
+    vec.push(format!("XDG IS {}",xdg));
     vec.push(format!("-name {0},process={0}",config.vmname));
     vec.push(format!("{} {} -machine {}",kvm,cpu,machine));
     vec.push(format!("-smp {0},sockets=1,cores={0},threads=1",cpu_cores));
@@ -165,6 +163,31 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
 
     Ok(vec)
 
+}
+
+fn get_xdg_runtime<'a>() -> Result<String,&'a str>{
+    let mut my_xdg_dir: String = String::new();
+    let xdg_dir = BaseDirs::new();
+    let l = match xdg_dir {
+        Some(x) => {
+            x
+        },
+        None => return Err("Nope"),
+    };
+
+    let xdg_runtime_dir = match l.runtime_dir()
+    {
+        Some(x) => x.to_str(),
+        None => return Err("Nope"),
+    };
+
+    let acutual_xdg_runtime_dir = match xdg_runtime_dir
+    {
+        Some(x) => x,
+        None => return Err("Nope"),
+    };
+
+    Ok(acutual_xdg_runtime_dir.to_string())
 }
 
 fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String),&str>
