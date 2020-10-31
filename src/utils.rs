@@ -19,7 +19,7 @@ pub fn get_system_memory() ->  u64 {
             _ => continue,
         };
         let mut kb = value.split(' ');
-        let number = match(kb.next()) {
+        let number = match kb.next() {
             Some(number) => match number.trim().parse() {
                 Ok(val) => val,
                 Err(_) => break,
@@ -37,7 +37,7 @@ pub fn get_system_memory() ->  u64 {
 
 fn socket_connect(port:u16) -> std::io::Result<()>
 {
-    let stream = TcpStream::connect(format!("127.0.0.1:{}",port))?;
+    TcpStream::connect(format!("127.0.0.1:{}",port))?;
     Ok(())
 }
 
@@ -49,10 +49,10 @@ pub fn find_open_socket(base_port: u16) -> Result<u16,config::ERRORCODES>
         debug!("Trying port {}",port);
         let r = socket_connect(port);
         match r {
-            Ok(t) => continue,
-            Err(e) => return Ok(port),
+            Ok(_t) => continue,
+            Err(_e) => return Ok(port),
         }
     }
     error!("Exhausted open port search");
-    Err(config::ERRORCODES::NO_OPEN_PORTS)
+    Err(config::ERRORCODES::NoOpenPorts)
 }
