@@ -166,7 +166,7 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, u8> {
         Ok(cfg) => {
             let q = QuickEmuConfig {
                 vmname: cfg.vmname.unwrap_or(String::from(filename)),
-                launcher: cfg.launcher.unwrap_or("".to_string()),
+                launcher: cfg.launcher.unwrap_or("slquickemu".to_string()),
                 guest_os: cfg.guest_os.unwrap_or("linux".to_string()),
                 kvm: cfg.kvm.unwrap_or(true),
                 cpu: cfg.cpu.unwrap_or("-cpu host,kvm=on".to_string()),

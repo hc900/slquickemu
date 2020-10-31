@@ -143,10 +143,15 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
         audio_output += &*format!(",server=unix:{0}/pulse/native,\
                         out.stream-name={1}-{2},\
                         in.stream-name={1}-{2} \
-                        -device {3}", xdg, "barbie", config.vmname, config.audio);
+                        -device {3}", xdg, config.launcher, config.vmname, config.audio);
     }
-    println!("{}",audio_output);
-    vec.push(format!("XDG IS {}",xdg));
+
+    if config.audio.contains("hda") || config.audio.contains("intel") {
+        audio_output += " -device hda-duplex,mixer=off";
+    }
+        audio_output += &*format!(",audiodev={}",config.audio_output);
+
+
     vec.push(format!("-name {0},process={0}",config.vmname));
     vec.push(format!("{} {} -machine {}",kvm,cpu,machine));
     vec.push(format!("-smp {0},sockets=1,cores={0},threads=1",cpu_cores));
@@ -160,6 +165,7 @@ fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,&str> {
     vec.push(cdrom_cmd);
     vec.push(cdrom2_cmd);
     vec.push(rtc);
+    vec.push(audio_output);
 
     Ok(vec)
 
