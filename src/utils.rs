@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 use std::net::TcpStream;
-use crate::config;
+use crate::qemuconfig;
 
 pub fn get_system_memory() ->  u64 {
     let file = match File::open("/proc/meminfo") {
@@ -41,7 +41,7 @@ fn socket_connect(port:u16) -> std::io::Result<()>
     Ok(())
 }
 
-pub fn find_open_socket(base_port: u16) -> Result<u16,config::ERRORCODES>
+pub fn find_open_socket(base_port: u16) -> Result<u16, qemuconfig::ERRORCODES>
 {
     for i in 1..=5
     {
@@ -54,5 +54,5 @@ pub fn find_open_socket(base_port: u16) -> Result<u16,config::ERRORCODES>
         }
     }
     error!("Exhausted open port search");
-    Err(config::ERRORCODES::NoOpenPorts)
+    Err(qemuconfig::ERRORCODES::NoOpenPorts)
 }

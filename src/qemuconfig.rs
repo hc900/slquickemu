@@ -1,12 +1,13 @@
-use serde::Deserialize;
+use serde::{Deserialize,Serialize};
 use std::path::Path;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::Read;
-use crate::{config, utils};
+use crate::{qemuconfig, utils};
 use crate::utils::find_open_socket;
 use directories::BaseDirs;
 use std::process::Command;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum ERRORCODES {
@@ -25,7 +26,7 @@ const DEFAULT_QEMU: &str  = "/snap/bin/qemu-virgil";
 const DEFAULT_QEMU_IMG: &str = "/snap/bin/qemu-virgil.qemu-img";
 //const DISK_MIN_SIZE: u32 = 197632 * 8;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct QuickEmuConfigOptions {
     vmname: Option<String>,
     launcher: Option<String>,
@@ -186,15 +187,89 @@ fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions, ERRORC
     Ok(config_q.unwrap())
 }
 
+
+fn get_empty_config() -> QuickEmuConfigOptions
+{
+    QuickEmuConfigOptions {
+        vmname: None,
+        launcher: None,
+        guest_os: None,
+        cpu: None,
+        kvm: None,
+        ram: None,
+        cpu_cores: None,
+        machine: None,
+        boot_menu: None,
+        boot: None,
+        iso: None,
+        driver_iso: None,
+        disk_img: None,
+        disk2_img: None,
+        disk: None,
+        disk2: None,
+        floppy: None,
+        disk_interface: None,
+        scsi_controller: None,
+        display_device: None,
+        audio: None,
+        audio_output: None,
+        virgl: None,
+        gl: None,
+        output: None,
+        output_extras: None,
+        rtc: None,
+        spice: None,
+        qemu_path: None,
+        qemu_img_path: None
+    }
+}
+
 pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
-    let my_config = load_config_file(config);
+    let empty_config = get_empty_config();
+    let mut cfgfile = config::Config::default();
+    let mut tweaks_cfg = config::Config::default();
+    debug!("Attempting to load tweaks file");
+    tweaks_cfg.merge(config::File::with_name("/home/hc/CLionProjects/slquickemu/target/debug/tweaks.toml"));
+    let mut tweaks = tweaks_cfg.try_into::<HashMap<String,QuickEmuConfigOptions>>();
+
+    let mut tweaks = match tweaks {
+        Ok(t) => t,
+        Err(x) => {
+            println!("ERROR Loading your tweaks file : {}",x);
+            return Err(qemuconfig::ERRORCODES::ReadConfigFile)
+        }
+    };
+    debug!("Attempting to load config file");
+//    let mut ss = toml::to_string(tweaks.get("linux").unwrap()).unwrap();
+//    debug!("Serialized is \n{}",ss);
+    cfgfile.merge(config::File::with_name(config));
+    let mut loaded = cfgfile.try_into::<qemuconfig::QuickEmuConfigOptions>();
     let filename = Path::new(config).file_stem().and_then(OsStr::to_str).unwrap_or("vm");
-    match my_config {
-        Ok(cfg) => {
+    match loaded {
+        Ok(mut cfg) => {
+            cfgfile = config::Config::default();
+            let mut config_string = toml::to_string(&cfg).unwrap_or("".to_string());
+            let guest_os = cfg.guest_os.unwrap_or("linux".to_string());
+            debug!("Found {} for guest os!",guest_os);
+            debug!("Checking for tweaks!");
+            if tweaks.contains_key(&guest_os) {
+                debug!("We have tweaks for {}, we will need to apply them..",guest_os);
+                //since we are here, the config file must be valid
+                //we should be able to reload it after we first merge in the tweaks.
+                let mut tweaks_string = toml::to_string( tweaks
+                        .get(&guest_os)
+                        .unwrap_or(&empty_config))
+                    .unwrap_or("".to_string());
+                cfgfile.merge(config::File::from_str(&tweaks_string,config::FileFormat::Toml));
+                cfgfile.merge(config::File::from_str(&config_string,config::FileFormat::Toml));
+                cfg = cfgfile.try_into::<qemuconfig::QuickEmuConfigOptions>().unwrap();
+                debug!("Tweaks should be applied!")
+            }
+            debug!("On we plow...");
             let q = QuickEmuConfig {
                 vmname: cfg.vmname.unwrap_or(String::from(filename)),
                 launcher: cfg.launcher.unwrap_or("slquickemu".to_string()),
-                guest_os: cfg.guest_os.unwrap_or("linux".to_string()),
+                guest_os: guest_os,
                 kvm: cfg.kvm.unwrap_or(true),
                 cpu: cfg.cpu.unwrap_or("-cpu host,kvm=on".to_string()),
                 ram: cfg.ram.unwrap_or("auto".to_string()),
@@ -227,7 +302,7 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
             //left space to do anything I need to correct before passing this out
             Ok(q)
         },
-        Err(e) => Err(e),
+        Err(e) => Err(ERRORCODES::ReadConfigFile),
     }
 }
 
@@ -241,7 +316,7 @@ fn load_config_file(config: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
     }
 }
 
-pub fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,config::ERRORCODES> {
+pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, qemuconfig::ERRORCODES> {
     let (cpu,machine, kvm ) = set_cpu_cmd(config)?;
     let cpu_cores = set_cpu_cores(config);
     let ram = set_ram_value(config);
@@ -325,31 +400,31 @@ pub fn build_config(config: &config::QuickEmuConfig) -> Result<Vec<String>,confi
 
 }
 
-fn get_xdg_runtime() -> Result<String,config::ERRORCODES>{
+fn get_xdg_runtime() -> Result<String, qemuconfig::ERRORCODES>{
     let xdg_dir = BaseDirs::new();
     let l = match xdg_dir {
         Some(x) => {
             x
         },
-        None => return Err(config::ERRORCODES::MissingXdg),
+        None => return Err(qemuconfig::ERRORCODES::MissingXdg),
     };
 
     let xdg_runtime_dir = match l.runtime_dir()
     {
         Some(x) => x.to_str(),
-        None => return Err(config::ERRORCODES::MissingXdg),
+        None => return Err(qemuconfig::ERRORCODES::MissingXdg),
     };
 
     let acutual_xdg_runtime_dir = match xdg_runtime_dir
     {
         Some(x) => x,
-        None => return Err(config::ERRORCODES::MissingXdg),
+        None => return Err(qemuconfig::ERRORCODES::MissingXdg),
     };
 
     Ok(acutual_xdg_runtime_dir.to_string())
 }
 
-fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String),config::ERRORCODES>
+fn set_cpu_cmd(config: &qemuconfig::QuickEmuConfig) -> Result<(String, String, String), qemuconfig::ERRORCODES>
 {
     let mut cpu: String;
     cpu = String::from("");
@@ -378,7 +453,7 @@ fn set_cpu_cmd(config: &config::QuickEmuConfig) -> Result<(String,String,String)
     Ok((cpu,machine,kvm))
 }
 
-fn get_output_gl_virgl(config: &config::QuickEmuConfig) -> Result<(String,String,String),config::ERRORCODES>
+fn get_output_gl_virgl(config: &qemuconfig::QuickEmuConfig) -> Result<(String, String, String), qemuconfig::ERRORCODES>
 {
     let mut gl;
     let mut output_extras = String::new();
@@ -408,7 +483,7 @@ fn get_output_gl_virgl(config: &config::QuickEmuConfig) -> Result<(String,String
     Ok((gl,output,output_extras))
 }
 
-fn set_output_extras(config: &config::QuickEmuConfig, output_extras: &String) -> String{
+fn set_output_extras(config: &qemuconfig::QuickEmuConfig, output_extras: &String) -> String{
     if config.output_extras.ne("")
     {
         let mut temp_oe;
@@ -462,7 +537,7 @@ fn set_floppy_cmd(floppy: String) -> String {
     }
 }
 
-fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: String, cdrom_index: u8) -> String {
+fn set_cdrom_cmd(config: &qemuconfig::QuickEmuConfig, cdrom: String, cdrom_index: u8) -> String {
     let cdrom_cmd: String = if cdrom.ne("") {
         let mut index = cdrom_index;
         if config.disk_interface.contains("ide") {
@@ -480,14 +555,14 @@ fn set_cdrom_cmd(config: &config::QuickEmuConfig, cdrom: String, cdrom_index: u8
     cdrom_cmd
 }
 
-fn set_iso_file(iso: &str) -> Result<String,config::ERRORCODES> {
+fn set_iso_file(iso: &str) -> Result<String, qemuconfig::ERRORCODES> {
     if iso.ne("") {
         if Path::new(iso).exists()
         {
             Ok(format!("{}", iso))
         } else {
             error!("MISSING ISO FILE {}", iso);
-            Err(config::ERRORCODES::NoSuchFile)
+            Err(qemuconfig::ERRORCODES::NoSuchFile)
         }
     } else {
         Ok(String::from(""))
@@ -495,7 +570,7 @@ fn set_iso_file(iso: &str) -> Result<String,config::ERRORCODES> {
 }
 
 
-fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, config::ERRORCODES> {
+fn set_drive_cmd(config: &qemuconfig::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, qemuconfig::ERRORCODES> {
     let iface = if config.disk_interface.eq("") ||
         config.disk_interface.eq("none") || config.disk_interface.contains("scsi")
     {
@@ -521,12 +596,12 @@ fn set_drive_cmd(config: &config::QuickEmuConfig, disk_img: String, drive_number
         } else {
             let e = "SCSI CONTROLLER TYPE WAS NOT DEFINED!";
             error!("{}", e);
-            Err(config::ERRORCODES::ScsiControllerMissing)
+            Err(qemuconfig::ERRORCODES::ScsiControllerMissing)
         }
     } else {
         let e = format!("DISK CONTROLLER TYPE {} IS UNKNOWN", config.disk_interface);
         error!("{}", e);
-        Err(config::ERRORCODES::UnknownDiskController)
+        Err(qemuconfig::ERRORCODES::UnknownDiskController)
     }
 }
 
@@ -555,7 +630,7 @@ fn handle_disk_image(qemu_img_path: &str, disk_img: &str, disk_size: &str) -> St
         }
 }
 
-fn set_boot_menu(config: &config::QuickEmuConfig) -> String {
+fn set_boot_menu(config: &qemuconfig::QuickEmuConfig) -> String {
     let boot_menu = if config.boot_menu == true {
         format!("-boot menu=on")
     } else {
@@ -564,20 +639,20 @@ fn set_boot_menu(config: &config::QuickEmuConfig) -> String {
     boot_menu
 }
 
-fn set_floppy(config: &config::QuickEmuConfig) -> Result<String, config::ERRORCODES> {
+fn set_floppy(config: &qemuconfig::QuickEmuConfig) -> Result<String, qemuconfig::ERRORCODES> {
     if config.floppy.ne("") {
         if Path::new(config.floppy.as_str()).exists() {
             Ok(format!("-fda {}", config.floppy))
         } else {
             error!("File {} does not seem to exist!", config.floppy);
-            Err(config::ERRORCODES::NoSuchFile)
+            Err(qemuconfig::ERRORCODES::NoSuchFile)
         }
     } else {
         Ok(format!(""))
     }
 }
 
-fn set_ram_value(config: &config::QuickEmuConfig) -> String {
+fn set_ram_value(config: &qemuconfig::QuickEmuConfig) -> String {
     let ram = if config.ram.eq("auto") {
         let m = utils::get_system_memory() / 1_000_000;
         if m >= 64 {
@@ -593,7 +668,7 @@ fn set_ram_value(config: &config::QuickEmuConfig) -> String {
     ram
 }
 
-fn set_cpu_cores(config: &config::QuickEmuConfig) -> u8 {
+fn set_cpu_cores(config: &qemuconfig::QuickEmuConfig) -> u8 {
     let cpu_cores = if config.cpu_cores == 0 {
         if num_cpus::get_physical() >= 8 {
             4u8

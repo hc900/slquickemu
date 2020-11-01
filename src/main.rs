@@ -23,14 +23,14 @@
  *
  */
 
-
-pub mod config;
+use config;
+pub mod qemuconfig;
 mod utils;
 
 extern crate clap;
 use clap::{Arg, App }; // SubCommand, Values};
 //use std::process::Command;
-use crate::config::ERRORCODES;
+use crate::qemuconfig::ERRORCODES;
 
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
@@ -61,15 +61,17 @@ fn main() -> Result<(), ERRORCODES> {
     pretty_env_logger::init();
 
 
-
     let config = matches.value_of("config").unwrap();
     info!("Using config file: {}",config);
 
-    let quick_emu_config = config::setup_options(&config);
+
+
+
+    let quick_emu_config = qemuconfig::setup_options(&config);
     let (cfg,config) =
     match quick_emu_config {
         Ok(config) => {
-            match config::build_config(&config) {
+            match qemuconfig::build_config(&config) {
                 Ok(t) => (t,config),
                 Err(e) => return Err(e),
             }
