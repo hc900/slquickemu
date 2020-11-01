@@ -1,3 +1,4 @@
+use glob::glob;
 use serde::{Deserialize,Serialize};
 use std::path::Path;
 use std::ffi::OsStr;
@@ -14,7 +15,8 @@ pub enum ERRORCODES {
     NoSuchFile,
     ScsiControllerMissing,
     UnknownDiskController,
-    MissingXdg,
+    MissingXdgRuntime,
+    MissingXdgConfig,
     NoOpenPorts,
     YAML,
     MISC,
@@ -85,7 +87,7 @@ struct Tweaks {
     i: i8
 }
 */
-
+#[derive(Serialize)]
 pub struct QuickEmuConfig {
     pub vmname: String,
     pub launcher: String,
@@ -181,11 +183,33 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
     let mut cfgfile = config::Config::default();
     let mut tweaks_cfg = config::Config::default();
     debug!("Attempting to load tweaks file");
-    match tweaks_cfg.merge(config::File::with_name( ""))
+    let xdg_config_dir = get_xdg_config_dir();
+    let xdg_config_str = match xdg_config_dir {
+        Ok(t) => t,
+        Err(e) => {
+            warn!("Couldn't find XDG CONFIG DIR, TWEAK LOADING WILL FAIL");
+            String::from("")
+        }
+    };
+
+    let glob_path = format!("{}/slquickemu/*",xdg_config_str);
+    debug!("Checking {}",glob_path);
+    for gp in glob(glob_path.as_str()).expect("Failed to read files in XDG_CONFIG")
     {
-        Ok(_t) => debug!("Loaded tweaks file!"),
-        Err(_e) => { error!("Failed to load tweaks file!") }
+        match gp {
+            Ok(t) => {
+                debug!("gp is {:?}", t.display());
+                let cfgfile_tmp = t.to_str().unwrap();
+                match tweaks_cfg.merge(config::File::with_name(cfgfile_tmp))
+                {
+                    Ok(_t) => debug!("Loaded tweaks file!"),
+                    Err(_e) => { error!("Failed to load tweaks file!") }
+                }
+        },
+            Err(e) => println!("{}",e),
+        }
     }
+
     let tweaks = tweaks_cfg.try_into::<HashMap<String,QuickEmuConfigOptions>>();
 
     let tweaks = match tweaks {
@@ -212,6 +236,15 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
     match loaded {
         Ok(mut cfg) => {
             cfgfile = config::Config::default();
+
+            if tweaks.contains_key("defaults")
+            {
+                debug!("Found defaults file. Loading that.");
+                let defaults_string = toml::to_string(tweaks.get("defaults").unwrap()).unwrap();
+                cfgfile.merge(config::File::from_str(&defaults_string,config::FileFormat::Toml));
+            } else {
+                warn!("No default file found, using built in defaults!");
+            }
             let config_string = toml::to_string(&cfg).unwrap_or("".to_string());
             let guest_os = cfg.guest_os.unwrap_or("linux".to_string());
             debug!("Found {} for guest os!",guest_os);
@@ -272,6 +305,13 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
 
 
 pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, qemuconfig::ERRORCODES> {
+
+    /*
+    let sss = toml::to_string(&config).unwrap();
+    println!("");
+    println!("{}",sss);
+    println!("");
+*/
     let (cpu,machine, kvm ) = set_cpu_cmd(config)?;
     let cpu_cores = set_cpu_cores(config);
     let ram = set_ram_value(config);
@@ -306,7 +346,7 @@ pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, 
         String::new()
     };
 
-    let xdg = get_xdg_runtime()?;
+    let xdg = get_xdg_runtime_dir()?;
 
     let mut audio_output = format!("-audiodev {0},id={0}",config.audio_output);
     if config.audio_output.eq("pa")
@@ -355,25 +395,40 @@ pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, 
 
 }
 
-fn get_xdg_runtime() -> Result<String, qemuconfig::ERRORCODES>{
+fn get_xdg_config_dir() -> Result<String, qemuconfig::ERRORCODES>
+{
+    let xdg_dir = BaseDirs::new();
+    let l = match xdg_dir {
+        Some(t) => t,
+        None => return Err(ERRORCODES::MissingXdgConfig),
+    }   ;
+    let xdg_config_dir = l.config_dir().to_str();
+    match xdg_config_dir
+    {
+        Some(t) => Ok(String::from(t)),
+        None => return Err(ERRORCODES::MissingXdgConfig),
+    }
+}
+
+fn get_xdg_runtime_dir() -> Result<String, qemuconfig::ERRORCODES>{
     let xdg_dir = BaseDirs::new();
     let l = match xdg_dir {
         Some(x) => {
             x
         },
-        None => return Err(qemuconfig::ERRORCODES::MissingXdg),
+        None => return Err(qemuconfig::ERRORCODES::MissingXdgConfig),
     };
 
     let xdg_runtime_dir = match l.runtime_dir()
     {
         Some(x) => x.to_str(),
-        None => return Err(qemuconfig::ERRORCODES::MissingXdg),
+        None => return Err(qemuconfig::ERRORCODES::MissingXdgRuntime),
     };
 
     let acutual_xdg_runtime_dir = match xdg_runtime_dir
     {
         Some(x) => x,
-        None => return Err(qemuconfig::ERRORCODES::MissingXdg),
+        None => return Err(qemuconfig::ERRORCODES::MissingXdgRuntime),
     };
 
     Ok(acutual_xdg_runtime_dir.to_string())
