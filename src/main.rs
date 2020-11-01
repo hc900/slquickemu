@@ -23,7 +23,6 @@
  *
  */
 
-use config;
 pub mod qemuconfig;
 mod utils;
 
@@ -63,8 +62,6 @@ fn main() -> Result<(), ERRORCODES> {
 
     let config = matches.value_of("config").unwrap();
     info!("Using config file: {}",config);
-
-
 
 
     let quick_emu_config = qemuconfig::setup_options(&config);

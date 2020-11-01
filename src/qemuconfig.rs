@@ -1,8 +1,6 @@
 use serde::{Deserialize,Serialize};
 use std::path::Path;
 use std::ffi::OsStr;
-use std::fs::File;
-use std::io::Read;
 use crate::{qemuconfig, utils};
 use crate::utils::find_open_socket;
 use directories::BaseDirs;
@@ -142,52 +140,6 @@ pub struct QuickEmuConfig {
 
 }
 
-
-fn get_extension_from_file(filename: &str) -> Option<&str> {
-    Path::new(filename)
-        .extension()
-        .and_then(OsStr::to_str)
-}
-
-fn slurp_file(filename: &str) -> Result<String, ERRORCODES> {
-    let mut file = match File::open(filename) {
-        Err(e) => {
-            println!("{:?}",e);
-            return Err(ERRORCODES::OpenConfigFile)},
-        Ok(f) => f,
-    };
-    let mut contents = String::new();
-    let len = match file.read_to_string(&mut contents)
-    {
-        Err(e) => {
-            println!("{:?}",e);
-            return Err(ERRORCODES::ReadConfigFile)
-        },
-        Ok(f) => f,
-    };
-
-    if len <= 0 {
-        return Err(ERRORCODES::ReadConfigFile);
-    }
-    Ok(String::from(contents))
-}
-
-fn load_config_from_yaml(filename: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
-    let config_string = slurp_file(filename)?;
-    //let config_string = r#"cpu = '486'"#;
-    let config_q = serde_yaml::from_str(&*config_string);
-    Ok(config_q.unwrap())
-}
-
-
-fn load_config_from_toml(filename: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
-    let config_string = slurp_file(filename)?;
-    //let config_string = r#"cpu = '486'"#;
-    let config_q = toml::from_str(&*config_string);
-    Ok(config_q.unwrap())
-}
-
-
 fn get_empty_config() -> QuickEmuConfigOptions
 {
     QuickEmuConfigOptions {
@@ -229,26 +181,38 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
     let mut cfgfile = config::Config::default();
     let mut tweaks_cfg = config::Config::default();
     debug!("Attempting to load tweaks file");
-    tweaks_cfg.merge(config::File::with_name("/home/hc/CLionProjects/slquickemu/target/debug/tweaks.toml"));
-    let mut tweaks = tweaks_cfg.try_into::<HashMap<String,QuickEmuConfigOptions>>();
+    match tweaks_cfg.merge(config::File::with_name( ""))
+    {
+        Ok(_t) => debug!("Loaded tweaks file!"),
+        Err(_e) => { error!("Failed to load tweaks file!") }
+    }
+    let tweaks = tweaks_cfg.try_into::<HashMap<String,QuickEmuConfigOptions>>();
 
-    let mut tweaks = match tweaks {
+    let tweaks = match tweaks {
         Ok(t) => t,
         Err(x) => {
-            println!("ERROR Loading your tweaks file : {}",x);
-            return Err(qemuconfig::ERRORCODES::ReadConfigFile)
+            error!("ERROR Loading your tweaks file : {}",x);
+            let a: HashMap<String,QuickEmuConfigOptions> = HashMap::new();
+            a
+            //return Err(qemuconfig::ERRORCODES::ReadConfigFile)
         }
     };
     debug!("Attempting to load config file");
 //    let mut ss = toml::to_string(tweaks.get("linux").unwrap()).unwrap();
 //    debug!("Serialized is \n{}",ss);
-    cfgfile.merge(config::File::with_name(config));
-    let mut loaded = cfgfile.try_into::<qemuconfig::QuickEmuConfigOptions>();
+    match cfgfile.merge(config::File::with_name(config)){
+        Ok(_t) => debug!("Loaded config file {}",config),
+        Err(e) => {
+            debug!("Error {}", e);
+            return Err(qemuconfig::ERRORCODES::ReadConfigFile);
+        }
+    }
+    let loaded = cfgfile.try_into::<qemuconfig::QuickEmuConfigOptions>();
     let filename = Path::new(config).file_stem().and_then(OsStr::to_str).unwrap_or("vm");
     match loaded {
         Ok(mut cfg) => {
             cfgfile = config::Config::default();
-            let mut config_string = toml::to_string(&cfg).unwrap_or("".to_string());
+            let config_string = toml::to_string(&cfg).unwrap_or("".to_string());
             let guest_os = cfg.guest_os.unwrap_or("linux".to_string());
             debug!("Found {} for guest os!",guest_os);
             debug!("Checking for tweaks!");
@@ -256,12 +220,12 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
                 debug!("We have tweaks for {}, we will need to apply them..",guest_os);
                 //since we are here, the config file must be valid
                 //we should be able to reload it after we first merge in the tweaks.
-                let mut tweaks_string = toml::to_string( tweaks
+                let tweaks_string = toml::to_string( tweaks
                         .get(&guest_os)
                         .unwrap_or(&empty_config))
                     .unwrap_or("".to_string());
-                cfgfile.merge(config::File::from_str(&tweaks_string,config::FileFormat::Toml));
-                cfgfile.merge(config::File::from_str(&config_string,config::FileFormat::Toml));
+                cfgfile.merge(config::File::from_str(&tweaks_string,config::FileFormat::Toml)).expect("Somehow failed to re-load tweaks");
+                cfgfile.merge(config::File::from_str(&config_string,config::FileFormat::Toml)).expect("Somehow failed to re-load config.");
                 cfg = cfgfile.try_into::<qemuconfig::QuickEmuConfigOptions>().unwrap();
                 debug!("Tweaks should be applied!")
             }
@@ -302,19 +266,10 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
             //left space to do anything I need to correct before passing this out
             Ok(q)
         },
-        Err(e) => Err(ERRORCODES::ReadConfigFile),
+        Err(_e) => Err(ERRORCODES::ReadConfigFile),
     }
 }
 
-fn load_config_file(config: &str) -> Result<QuickEmuConfigOptions, ERRORCODES> {
-    let filetype = get_extension_from_file(&config)
-        .unwrap_or("none");
-    match filetype {
-        "toml" => load_config_from_toml(config),
-        "yaml" => load_config_from_yaml(config),
-        _ => Err(ERRORCODES::MISC)
-    }
-}
 
 pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, qemuconfig::ERRORCODES> {
     let (cpu,machine, kvm ) = set_cpu_cmd(config)?;
@@ -426,15 +381,12 @@ fn get_xdg_runtime() -> Result<String, qemuconfig::ERRORCODES>{
 
 fn set_cpu_cmd(config: &qemuconfig::QuickEmuConfig) -> Result<(String, String, String), qemuconfig::ERRORCODES>
 {
-    let mut cpu: String;
-    cpu = String::from("");
-
-    if !config.cpu.starts_with("-cpu")
+    let cpu: String = if !config.cpu.starts_with("-cpu")
     {
-        cpu = format!("-cpu {}",config.cpu);
+        format!("-cpu {}",config.cpu)
     } else {
-        cpu = config.cpu.clone();
-    }
+        config.cpu.clone()
+    };
     let mut machine = config.machine.clone();
 
     //final things
@@ -443,13 +395,11 @@ fn set_cpu_cmd(config: &qemuconfig::QuickEmuConfig) -> Result<(String, String, S
         machine = String::from("isapc");
     }
 
-    let mut kvm ;
-    kvm = String::from("");
-    if !config.kvm {
-        kvm = String::from("");
+    let kvm =if !config.kvm {
+        String::from("")
     } else {
-        kvm = String::from("-enable-kvm")
-    }
+        String::from("-enable-kvm")
+    };
     Ok((cpu,machine,kvm))
 }
 
@@ -529,13 +479,6 @@ fn set_video_cmd(disp: String, virgl: String) -> String {
     }
 }
 
-fn set_floppy_cmd(floppy: String) -> String {
-    if floppy.ne("") {
-        format!("-fda \"{}\"", floppy)
-    } else {
-        format!("")
-    }
-}
 
 fn set_cdrom_cmd(config: &qemuconfig::QuickEmuConfig, cdrom: String, cdrom_index: u8) -> String {
     let cdrom_cmd: String = if cdrom.ne("") {
