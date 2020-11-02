@@ -252,7 +252,7 @@ pub fn setup_options(config: &str) -> Result<QuickEmuConfig, ERRORCODES> {
     match cfgfile.merge(config::File::with_name(config)){
         Ok(_t) => debug!("Loaded config file {}",config),
         Err(e) => {
-            debug!("Error {}", e);
+            error!("Error {}", e);
             return Err(qemuconfig::ERRORCODES::ReadConfigFile);
         }
     }
@@ -350,13 +350,13 @@ pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, 
 
     //let floppy = set_floppy_cmd(floppy);
 
-    let drive_cmd = set_drive_cmd(config, disk_img, 0)?;
-    let drive2_cmd = set_drive_cmd(config, disk2_img, 1)?;
+    let drive_cmd = set_drive_cmd(config, &disk_img, 0)?;
+    let drive2_cmd = set_drive_cmd(config, &disk2_img, 1)?;
 
     let cdrom = set_iso_file(config.iso.as_str())?;
     let driver_cdrom = set_iso_file(config.driver_iso.as_str())?;
-    let cdrom_cmd = set_cdrom_cmd(config, cdrom, 0);
-    let cdrom2_cmd = set_cdrom_cmd(config, driver_cdrom, 1);
+    let cdrom_cmd = set_cdrom_cmd(config,&cdrom, 0);
+    let cdrom2_cmd = set_cdrom_cmd(config, &driver_cdrom, 1);
 
     let disp = config.display_device.clone();
 
@@ -399,6 +399,10 @@ pub fn build_config(config: &qemuconfig::QuickEmuConfig) -> Result<Vec<String>, 
     //rng
     //serial port
     //extra options
+    if disk_img.eq("") && disk2_img.eq("") && cdrom.eq("") {
+        info!("no disk images have been set, is this a mistake?");
+    }
+
 
     vec.push(format!("-name {0},process={0}",config.vmname));
     vec.push(format!("{} {} -machine {}",kvm,cpu,machine));
@@ -560,7 +564,7 @@ fn set_video_cmd(disp: String, virgl: String) -> String {
 }
 
 
-fn set_cdrom_cmd(config: &qemuconfig::QuickEmuConfig, cdrom: String, cdrom_index: u8) -> String {
+fn set_cdrom_cmd(config: &qemuconfig::QuickEmuConfig, cdrom: &String, cdrom_index: u8) -> String {
     let cdrom_cmd: String = if cdrom.ne("") {
         let mut index = cdrom_index;
         if config.disk_interface.contains("ide") {
@@ -593,7 +597,7 @@ fn set_iso_file(iso: &str) -> Result<String, qemuconfig::ERRORCODES> {
 }
 
 
-fn set_drive_cmd(config: &qemuconfig::QuickEmuConfig, disk_img: String, drive_number: u8) -> Result<String, qemuconfig::ERRORCODES> {
+fn set_drive_cmd(config: &qemuconfig::QuickEmuConfig, disk_img: &String, drive_number: u8) -> Result<String, qemuconfig::ERRORCODES> {
     let iface = if config.disk_interface.eq("") ||
         config.disk_interface.eq("none") || config.disk_interface.contains("scsi")
     {

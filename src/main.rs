@@ -25,27 +25,40 @@
 
 pub mod qemuconfig;
 mod utils;
-
+use env_logger::Env;
 extern crate clap;
 use clap::{Arg, App }; // SubCommand, Values};
 //use std::process::Command;
 use crate::qemuconfig::ERRORCODES;
-
+use log::LevelFilter;
 extern crate pretty_env_logger;
+extern crate env_logger;
 #[macro_use] extern crate log;
+
+use env_logger::Target;
+use std::env;
 
 #[allow(unused_variables)]
 fn main() -> Result<(), ERRORCODES> {
     let matches = App::new("slquickemu")
         .version("0.1")
         .author("HC hc@hackerlan.com")
-        .about("Rust implementation of slquickemu by HC\nBased on quickemu by Martin Wimpress")
+        .about("Rust implementation of slquickemu by HC\
+        \nBased on quickemu by Martin Wimpress\
+        \nGPL Version 2\nNo Warranty!\n
+        ")
         .arg(Arg::with_name("config")
             .long("vm")
             .value_name("CONFIG")
             .help("Config File to Run")
             .takes_value(true)
             .required(true)
+        )
+        .arg( Arg::with_name("v")
+            .short("v")
+            .multiple(true)
+            .required(false)
+            .help("sets the level of verbosity (RUST_LOG=)")
         )
         .get_matches();
 /*
@@ -57,9 +70,16 @@ fn main() -> Result<(), ERRORCODES> {
     println!("stdout: {}", String::from_utf8_lossy(&r.stdout));
     println!("stdout: {}", String::from_utf8_lossy(&r.stderr));
 */
-    pretty_env_logger::init();
+    match matches.occurrences_of("v")
+    {
+        0 => env::set_var("RUST_LOG","error"),
+        1 => env::set_var("RUST_LOG","warn"),
+        2 => env::set_var("RUST_LOG","info"),
+        3 => env::set_var("RUST_LOG","debug"),
+        4 | _ => env::set_var("RUST_LOG", "trace"),
+    }
 
-
+    pretty_env_logger::init_custom_env("RUST_LOG");
     let config = matches.value_of("config").unwrap();
     info!("Using config file: {}",config);
 
